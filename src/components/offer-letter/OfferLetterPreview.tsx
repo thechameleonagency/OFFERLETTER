@@ -11,7 +11,6 @@ interface OfferLetterPreviewProps {
 interface PreviewBlock {
   key: string;
   estimate: number;
-  forceNewPageBefore?: boolean;
   node: ReactNode;
 }
 
@@ -125,20 +124,13 @@ function Page({
       }}
     >
       {showHeader ? <Header data={data} /> : null}
-      <div
-        style={{
-          ...pageBodyStyle,
-          minHeight: showHeader ? FIRST_PAGE_CAPACITY : FOLLOWING_PAGE_CAPACITY,
-        }}
-      >
-        {children}
-      </div>
+      <div style={pageBodyStyle}>{children}</div>
     </div>
   );
 }
 
-function createPreviewBlocks(data: OfferLetterData, signatory: string): PreviewBlock[] {
-  const blocks: PreviewBlock[] = [
+function createPrePolicyBlocks(data: OfferLetterData, signatory: string): PreviewBlock[] {
+  return [
     {
       key: "title",
       estimate: 60,
@@ -227,22 +219,53 @@ function createPreviewBlocks(data: OfferLetterData, signatory: string): PreviewB
       node: <h2 style={headingStyle}>ROLE, RESPONSIBILITIES & REPORTING</h2>,
     },
     {
-      key: "responsibilities",
-      estimate: estimateRichTextHeight(data.responsibilities) + 30,
-      node: <div>{renderRichText(data.responsibilities, "responsibilities")}</div>,
+      key: "role-overview",
+      estimate: 26 + estimateTextLines(data.roleOverview, 72) * 22,
+      node: <div>{renderRichText(data.roleOverview, "role-overview")}</div>,
     },
     {
-      key: "reporting",
-      estimate: 60,
+      key: "responsibility-points",
+      estimate: 16 + data.responsibilityPoints.reduce((sum, item) => sum + estimateTextLines(item, 58) * 22, 0),
       node: (
-        <p style={{ margin: "18px 0 10px", lineHeight: 1.8 }}>
-          You will report directly to <strong>{filledValue(data.reportingTo)}</strong> and are expected to support the
-          company with dedication, accuracy, and professionalism.
-        </p>
+        <ul style={{ margin: "0 0 12px", paddingLeft: 22, lineHeight: 1.8 }}>
+          {data.responsibilityPoints.map((item, index) => (
+            <li key={`responsibility-point-${index}`} style={{ marginBottom: 6 }}>
+              {filledValue(item)}
+            </li>
+          ))}
+        </ul>
       ),
     },
     {
-      key: "closing",
+      key: "admin-intro",
+      estimate: 26 + estimateTextLines(data.adminIntro, 68) * 22,
+      node: <div>{renderRichText(data.adminIntro, "admin-intro")}</div>,
+    },
+    {
+      key: "admin-points",
+      estimate: 16 + data.adminPoints.reduce((sum, item) => sum + estimateTextLines(item, 58) * 22, 0),
+      node: (
+        <ul style={{ margin: "0 0 12px", paddingLeft: 22, lineHeight: 1.8, listStyleType: "circle" }}>
+          {data.adminPoints.map((item, index) => (
+            <li key={`admin-point-${index}`} style={{ marginBottom: 6 }}>
+              {filledValue(item)}
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      key: "responsibilities-closing",
+      estimate: 26 + estimateTextLines(data.responsibilitiesClosing, 72) * 22,
+      node: <div>{renderRichText(data.responsibilitiesClosing, "responsibilities-closing")}</div>,
+    },
+    {
+      key: "reporting-closing",
+      estimate: 26 + estimateTextLines(data.reportingClosing, 72) * 22,
+      node: <div>{renderRichText(data.reportingClosing, "reporting-closing")}</div>,
+    },
+    {
+      key: "closing-line",
       estimate: 58,
       node: (
         <p style={{ margin: "0 0 26px", lineHeight: 1.8 }}>
@@ -265,10 +288,14 @@ function createPreviewBlocks(data: OfferLetterData, signatory: string): PreviewB
         </div>
       ),
     },
+  ];
+}
+
+function createPostPolicyBlocks(data: OfferLetterData): PreviewBlock[] {
+  const blocks: PreviewBlock[] = [
     {
       key: "policies-heading",
       estimate: 34,
-      forceNewPageBefore: true,
       node: <h2 style={headingStyle}>COMPANY POLICIES & BENEFITS</h2>,
     },
   ];
@@ -367,24 +394,18 @@ function createPreviewBlocks(data: OfferLetterData, signatory: string): PreviewB
   return blocks;
 }
 
-function paginateBlocks(blocks: PreviewBlock[], heights: Record<string, number>) {
+function paginateBlocks(blocks: PreviewBlock[], heights: Record<string, number>, firstCapacity: number, nextCapacity: number) {
   const pages: PreviewBlock[][] = [];
   let currentPage: PreviewBlock[] = [];
-  let remaining = FIRST_PAGE_CAPACITY;
+  let remaining = firstCapacity;
 
   for (const block of blocks) {
     const blockHeight = heights[block.key] ?? block.estimate;
 
-    if (block.forceNewPageBefore && currentPage.length > 0) {
-      pages.push(currentPage);
-      currentPage = [];
-      remaining = FOLLOWING_PAGE_CAPACITY;
-    }
-
     if (currentPage.length > 0 && blockHeight > remaining) {
       pages.push(currentPage);
       currentPage = [];
-      remaining = FOLLOWING_PAGE_CAPACITY;
+      remaining = nextCapacity;
     }
 
     currentPage.push(block);
@@ -400,22 +421,25 @@ function paginateBlocks(blocks: PreviewBlock[], heights: Record<string, number>)
 
 export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
   const signatory = filledValue(data.signatoryName || data.company.founderName);
-  const blocks = useMemo(() => createPreviewBlocks(data, signatory), [data, signatory]);
+  const prePolicyBlocks = useMemo(() => createPrePolicyBlocks(data, signatory), [data, signatory]);
+  const postPolicyBlocks = useMemo(() => createPostPolicyBlocks(data), [data]);
+  const allBlocks = [...prePolicyBlocks, ...postPolicyBlocks];
   const measureRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [blockHeights, setBlockHeights] = useState<Record<string, number>>({});
 
   useLayoutEffect(() => {
     const nextHeights = Object.fromEntries(
-      blocks.map((block) => [block.key, Math.ceil(measureRefs.current[block.key]?.offsetHeight ?? block.estimate)]),
+      allBlocks.map((block) => [block.key, Math.ceil(measureRefs.current[block.key]?.offsetHeight ?? block.estimate)]),
     );
 
-    const changed = blocks.some((block) => nextHeights[block.key] !== blockHeights[block.key]);
+    const changed = allBlocks.some((block) => nextHeights[block.key] !== blockHeights[block.key]);
     if (changed) {
       setBlockHeights(nextHeights);
     }
-  }, [blocks, blockHeights]);
+  }, [allBlocks, blockHeights]);
 
-  const pages = paginateBlocks(blocks, blockHeights);
+  const prePolicyPages = paginateBlocks(prePolicyBlocks, blockHeights, FIRST_PAGE_CAPACITY, FOLLOWING_PAGE_CAPACITY);
+  const postPolicyPages = paginateBlocks(postPolicyBlocks, blockHeights, FOLLOWING_PAGE_CAPACITY, FOLLOWING_PAGE_CAPACITY);
 
   return (
     <>
@@ -430,7 +454,7 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
           pointerEvents: "none",
         }}
       >
-        {blocks.map((block) => (
+        {allBlocks.map((block) => (
           <div
             key={`measure-${block.key}`}
             ref={(node) => {
@@ -452,8 +476,16 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
           overflow: "visible",
         }}
       >
-        {pages.map((pageBlocks, pageIndex) => (
-          <Page data={data} key={`page-${pageIndex + 1}`} pageIndex={pageIndex}>
+        {prePolicyPages.map((pageBlocks, pageIndex) => (
+          <Page data={data} key={`pre-policy-${pageIndex + 1}`} pageIndex={pageIndex}>
+            {pageBlocks.map((block) => (
+              <div key={block.key}>{block.node}</div>
+            ))}
+          </Page>
+        ))}
+
+        {postPolicyPages.map((pageBlocks, pageOffset) => (
+          <Page data={data} key={`post-policy-${pageOffset + 1}`} pageIndex={prePolicyPages.length + pageOffset}>
             {pageBlocks.map((block) => (
               <div key={block.key}>{block.node}</div>
             ))}

@@ -1,16 +1,29 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
-async function toDataUrl(url: string) {
-  const response = await fetch(url);
-  const blob = await response.blob();
-
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
   });
+}
+
+async function rasterizeToPngDataUrl(src: string) {
+  const image = await loadImage(src);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width || 1;
+  canvas.height = image.naturalHeight || image.height || 1;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return src;
+  }
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
 }
 
 async function withEmbeddedImages(container: HTMLElement, task: () => Promise<void>) {
@@ -18,12 +31,12 @@ async function withEmbeddedImages(container: HTMLElement, task: () => Promise<vo
   const originals = await Promise.all(
     images.map(async (img) => {
       const originalSrc = img.src;
-      if (!originalSrc || originalSrc.startsWith("data:")) {
+      if (!originalSrc) {
         return { img, originalSrc, replaced: false };
       }
 
       try {
-        const dataUrl = await toDataUrl(originalSrc);
+        const dataUrl = await rasterizeToPngDataUrl(originalSrc);
         img.src = dataUrl;
         return { img, originalSrc, replaced: true };
       } catch {
@@ -48,37 +61,46 @@ export async function exportOfferLetterPdf(element: HTMLElement, fileName: strin
 
   await withEmbeddedImages(element, async () => {
     const pages = Array.from(element.querySelectorAll<HTMLElement>("[data-export-page='true']"));
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageWidthMm = 210;
-    const pageHeightMm = 297;
+    if (pages.length === 0) {
+      return;
+    }
 
-    for (const [index, page] of pages.entries()) {
-      const pageRect = page.getBoundingClientRect();
-      const canvas = await html2canvas(page, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        windowWidth: Math.ceil(pageRect.width),
-        width: Math.ceil(pageRect.width),
-        height: Math.ceil(pageRect.height),
-      });
+    const pageCanvases = await Promise.all(
+      pages.map(async (page) => {
+        const pageRect = page.getBoundingClientRect();
+        return await html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          windowWidth: Math.ceil(pageRect.width),
+          width: Math.ceil(pageRect.width),
+          height: Math.ceil(pageRect.height),
+        });
+      }),
+    );
+
+    const firstCanvas = pageCanvases[0];
+    const firstHeightMm = (firstCanvas.height / firstCanvas.width) * 210;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [210, firstHeightMm] });
+
+    pageCanvases.forEach((canvas, index) => {
+      const pageHeightMm = (canvas.height / canvas.width) * 210;
 
       if (index > 0) {
-        pdf.addPage();
+        pdf.addPage([210, pageHeightMm], "portrait");
       }
 
       const imageData = canvas.toDataURL("image/jpeg", 0.85);
-      const imageHeightMm = (canvas.height / canvas.width) * pageWidthMm;
-      pdf.addImage(imageData, "JPEG", 0, 0, pageWidthMm, imageHeightMm, undefined, "FAST");
+      pdf.addImage(imageData, "JPEG", 0, 0, 210, pageHeightMm, undefined, "FAST");
 
       if (showPageNumbers) {
         pdf.setFontSize(8);
         pdf.setTextColor(120, 128, 140);
-        pdf.text(`Page ${index + 1} of ${pages.length}`, pageWidthMm - 10, pageHeightMm - 6, {
+        pdf.text(`Page ${index + 1} of ${pageCanvases.length}`, 200, pageHeightMm - 6, {
           align: "right",
         });
       }
-    }
+    });
 
     pdf.save(`${fileName || "offer-letter"}.pdf`);
   });

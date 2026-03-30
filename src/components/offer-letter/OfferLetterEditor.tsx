@@ -159,11 +159,35 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
 
       <AccordionSection
         title="Role, Responsibilities & Reporting"
-        helper="Lines starting with '-' render as bullets. Use '  -' (2 spaces + dash) for sub-bullets."
+        helper="Use separate content blocks so the preview can keep paragraphs and bullet groups together more accurately across pages."
       >
-        <div className="field">
-          <label>Responsibilities</label>
-          <textarea rows={10} value={data.responsibilities} onChange={(event) => update("responsibilities", event.target.value)} />
+        <div className="stack">
+          <div className="field">
+            <label>Role Overview</label>
+            <textarea rows={3} value={data.roleOverview} onChange={(event) => update("roleOverview", event.target.value)} />
+          </div>
+          <BulletListEditor
+            label="Primary Responsibilities"
+            items={data.responsibilityPoints}
+            onChange={(next) => update("responsibilityPoints", next)}
+          />
+          <div className="field">
+            <label>Admin Operations Intro</label>
+            <input value={data.adminIntro} onChange={(event) => update("adminIntro", event.target.value)} />
+          </div>
+          <BulletListEditor label="Admin Operations Points" items={data.adminPoints} onChange={(next) => update("adminPoints", next)} />
+          <div className="field">
+            <label>Responsibilities Closing</label>
+            <textarea
+              rows={3}
+              value={data.responsibilitiesClosing}
+              onChange={(event) => update("responsibilitiesClosing", event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label>Reporting Paragraph</label>
+            <textarea rows={4} value={data.reportingClosing} onChange={(event) => update("reportingClosing", event.target.value)} />
+          </div>
         </div>
       </AccordionSection>
 

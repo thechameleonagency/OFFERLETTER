@@ -10,6 +10,73 @@ function createTerm(title: string, content: string): OfferLetterTerm {
   };
 }
 
+function parseLegacyResponsibilities(responsibilities?: string) {
+  if (!responsibilities?.trim()) {
+    return null;
+  }
+
+  const lines = responsibilities.split("\n").map((line) => line.trimEnd());
+  const bullets = lines.filter((line) => line.startsWith("- ")).map((line) => line.replace(/^- /, ""));
+  const nested = lines.filter((line) => line.match(/^\s+- /)).map((line) => line.replace(/^\s+- /, ""));
+  const paragraphs = lines.filter((line) => line.trim() && !line.match(/^\s*- /));
+
+  return {
+    roleOverview: paragraphs[0] ?? "In this role, you will be responsible for:",
+    responsibilityPoints: bullets.slice(0, Math.max(0, bullets.length - nested.length > 0 ? 2 : bullets.length)),
+    adminIntro: bullets.find((line) => line.includes("Administrative operations")) ?? "Administrative operations including:",
+    adminPoints: nested,
+    responsibilitiesClosing:
+      paragraphs.find((line) => line.includes("Ensuring smooth internal operations")) ??
+      "Ensuring smooth internal operations and accurate documentation will be a key part of your responsibilities.",
+    reportingClosing:
+      paragraphs.find((line) => line.includes("report directly")) ??
+      "You will report directly to the reporting manager and are expected to coordinate closely with management, finance, and site teams to ensure efficient day-to-day operations.",
+  };
+}
+
+export function buildLegacyResponsibilities(data: Pick<
+  OfferLetterData,
+  "roleOverview" | "responsibilityPoints" | "adminIntro" | "adminPoints" | "responsibilitiesClosing" | "reportingClosing"
+>) {
+  return [
+    data.roleOverview,
+    "",
+    ...data.responsibilityPoints.map((item) => `- ${item}`),
+    data.adminIntro ? `- ${data.adminIntro}` : "",
+    ...data.adminPoints.map((item) => `  - ${item}`),
+    "",
+    data.responsibilitiesClosing,
+    "",
+    data.reportingClosing,
+  ]
+    .filter((line, index, arr) => !(line === "" && arr[index - 1] === ""))
+    .join("\n");
+}
+
+export function normalizeOfferLetterData(input?: Partial<OfferLetterData> | null): OfferLetterData {
+  const defaults = createDefaultOfferLetterData();
+  const legacy = parseLegacyResponsibilities(input?.responsibilities);
+
+  const normalized: OfferLetterData = {
+    ...defaults,
+    ...input,
+    company: {
+      ...defaults.company,
+      ...input?.company,
+    },
+    roleOverview: input?.roleOverview ?? legacy?.roleOverview ?? defaults.roleOverview,
+    responsibilityPoints: input?.responsibilityPoints ?? legacy?.responsibilityPoints ?? defaults.responsibilityPoints,
+    adminIntro: input?.adminIntro ?? legacy?.adminIntro ?? defaults.adminIntro,
+    adminPoints: input?.adminPoints ?? legacy?.adminPoints ?? defaults.adminPoints,
+    responsibilitiesClosing:
+      input?.responsibilitiesClosing ?? legacy?.responsibilitiesClosing ?? defaults.responsibilitiesClosing,
+    reportingClosing: input?.reportingClosing ?? legacy?.reportingClosing ?? defaults.reportingClosing,
+  };
+
+  normalized.responsibilities = buildLegacyResponsibilities(normalized);
+  return normalized;
+}
+
 export function createDefaultOfferLetterData(): OfferLetterData {
   return {
     company: {
@@ -32,21 +99,24 @@ export function createDefaultOfferLetterData(): OfferLetterData {
     monthlySalary: 0,
     reportingTo: "",
     offerValidityDays: 15,
-    responsibilities: `In this role, you will be responsible for:
-
-- File login, file preparation, and submission to banks
-- Document handling and loan management
-- Administrative operations including:
-  - Expense tracking
-  - Site coordination
-  - Data management
-  - Attendance records
-  - Inventory handling
-  - Preparation of quotations
-
-Ensuring smooth internal operations and accurate documentation will be a key part of your responsibilities.
-
-You will report directly to the reporting manager and are expected to coordinate closely with management, finance, and site teams to ensure efficient day-to-day operations.`,
+    roleOverview: "In this role, you will be responsible for:",
+    responsibilityPoints: [
+      "File login, file preparation, and submission to banks",
+      "Document handling and loan management",
+    ],
+    adminIntro: "Administrative operations including:",
+    adminPoints: [
+      "Expense tracking",
+      "Site coordination",
+      "Data management",
+      "Attendance records",
+      "Inventory handling",
+      "Preparation of quotations",
+    ],
+    responsibilitiesClosing:
+      "Ensuring smooth internal operations and accurate documentation will be a key part of your responsibilities.",
+    reportingClosing:
+      "You will report directly to the reporting manager and are expected to coordinate closely with management, finance, and site teams to ensure efficient day-to-day operations.",
     leavePolicy: [
       "1 leave/holiday on Amavasya / Sunday per month",
       "1 paid leave per month",

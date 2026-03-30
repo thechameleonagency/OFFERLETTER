@@ -4,7 +4,7 @@ import { useBeforeUnload, useNavigate, useParams } from "react-router-dom";
 import { OfferLetterEditor } from "../components/offer-letter/OfferLetterEditor";
 import { OfferLetterPreview } from "../components/offer-letter/OfferLetterPreview";
 import { SaveOfferLetterDialog } from "../components/offer-letter/SaveOfferLetterDialog";
-import { createDefaultOfferLetterData } from "../lib/offer-letter-defaults";
+import { buildLegacyResponsibilities, createDefaultOfferLetterData, normalizeOfferLetterData } from "../lib/offer-letter-defaults";
 import { exportOfferLetterPdf } from "../lib/export-offer-letter-pdf";
 import { clearDraft, getDraft, getOfferLetter, saveDraft, saveOfferLetterRecord } from "../lib/offer-letter-storage";
 import type { OfferLetterData } from "../types/offer-letter";
@@ -20,11 +20,11 @@ export function OfferLetterMaker() {
   const record = params.id ? getOfferLetter(params.id) : null;
   const initialData = useMemo(() => {
     if (record) {
-      return cloneData(record.content);
+      return normalizeOfferLetterData(cloneData(record.content));
     }
 
     const draft = getDraft();
-    return draft ?? createDefaultOfferLetterData();
+    return draft ? normalizeOfferLetterData(draft) : createDefaultOfferLetterData();
   }, [record]);
 
   const [data, setData] = useState<OfferLetterData>(initialData);
@@ -42,7 +42,7 @@ export function OfferLetterMaker() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!record) {
-        saveDraft(data);
+        saveDraft({ ...data, responsibilities: buildLegacyResponsibilities(data) });
       }
     }, 400);
 
@@ -81,7 +81,7 @@ export function OfferLetterMaker() {
     const saved = saveOfferLetterRecord({
       id: record?.id,
       name,
-      content: data,
+      content: { ...data, responsibilities: buildLegacyResponsibilities(data) },
     });
 
     clearDraft();
@@ -133,6 +133,13 @@ export function OfferLetterMaker() {
       <div className="layout-grid">
         {!showPreview ? (
           <section className="content-card editor-shell">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Editor</p>
+                <h2>Offer Letter Details</h2>
+              </div>
+              <p className="muted-text">Fill each section in order and the document updates automatically.</p>
+            </div>
             <div className="scroll-area">
               <OfferLetterEditor data={data} onChange={setData} />
             </div>
@@ -140,8 +147,15 @@ export function OfferLetterMaker() {
         ) : null}
 
         <section className="content-card preview-shell" ref={previewRef} style={{ gridColumn: showPreview ? "1 / -1" : undefined }}>
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Preview</p>
+              <h2>Page-by-Page Document</h2>
+            </div>
+            <p className="muted-text">This preview is the exact source used for PDF export.</p>
+          </div>
           <div className="preview-scale-note">
-            Preview is rendered at a fixed 800px document width for export fidelity. PDF output uses the same preview DOM.
+            A4-based pages are rendered here exactly as export pages, so review layout and page breaks before downloading.
           </div>
           <div className="scroll-area" style={{ width: "100%", display: "grid", justifyItems: "center" }}>
             <OfferLetterPreview data={data} />

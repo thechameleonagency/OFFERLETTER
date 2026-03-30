@@ -27,7 +27,13 @@ export interface OfferLetterData {
   monthlySalary: number;
   reportingTo: string;
   offerValidityDays: number;
-  responsibilities: string;
+  responsibilities?: string;
+  roleOverview: string;
+  responsibilityPoints: string[];
+  adminIntro: string;
+  adminPoints: string[];
+  responsibilitiesClosing: string;
+  reportingClosing: string;
   leavePolicy: string[];
   salaryPolicy: string[];
   otherBenefits: string[];
