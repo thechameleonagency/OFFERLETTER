@@ -197,12 +197,12 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
         <BulletListEditor label="Other Benefits" items={data.otherBenefits} onChange={(next) => update("otherBenefits", next)} />
         <div className="field-grid">
           <div className="field">
-            <label>Insurance Coverage</label>
-            <input value={data.insuranceCoverage} onChange={(event) => update("insuranceCoverage", event.target.value)} />
+            <label>Insurance Policy</label>
+            <textarea rows={4} value={data.insuranceCoverage} onChange={(event) => update("insuranceCoverage", event.target.value)} />
           </div>
           <div className="field">
-            <label>Minimum Tenure for Insurance</label>
-            <input value={data.insuranceMinTenure} onChange={(event) => update("insuranceMinTenure", event.target.value)} />
+            <label>Insurance Reimbursement Condition</label>
+            <textarea rows={4} value={data.insuranceMinTenure} onChange={(event) => update("insuranceMinTenure", event.target.value)} />
           </div>
         </div>
       </AccordionSection>

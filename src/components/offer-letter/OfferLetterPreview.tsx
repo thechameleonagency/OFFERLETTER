@@ -329,10 +329,10 @@ function createPostPolicyBlocks(data: OfferLetterData): PreviewBlock[] {
       node: (
         <div>
           <p style={{ margin: "14px 0 4px", lineHeight: 1.8 }}>
-            <strong>Insurance Coverage:</strong> {filledValue(data.insuranceCoverage)}
+            <strong>Insurance Policy:</strong> {filledValue(data.insuranceCoverage)}
           </p>
           <p style={{ margin: "0 0 18px", lineHeight: 1.8 }}>
-            <strong>Minimum Tenure for Insurance:</strong> {filledValue(data.insuranceMinTenure)}
+            <strong>Insurance Reimbursement Condition:</strong> {filledValue(data.insuranceMinTenure)}
           </p>
         </div>
       ),

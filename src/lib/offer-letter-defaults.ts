@@ -117,11 +117,11 @@ export function createDefaultOfferLetterData(): OfferLetterData {
       "Ensuring smooth internal operations and accurate documentation will be a key part of your responsibilities.",
     reportingClosing:
       "You will report directly to the reporting manager and are expected to coordinate closely with management, finance, and site teams to ensure efficient day-to-day operations.",
-    leavePolicy: [
-      "1 leave/holiday on Amavasya / Sunday per month",
+      leavePolicy: [
       "1 paid leave per month",
-      "1 Fun Day every month (Games / Team activity day)",
-      "Major festival leaves as per company calendar",
+      "1 holiday on Amavasya / Sunday per month",
+      "1 Fun Day every month (Games / Team activity day / Entertainmnent day / etc.)",
+      "Major festival holidays as per company calendar",
       "Fun days and holidays are at the sole discretion of the Company and may be changed at any time. The Company may provide additional bonus or compensation in case of holiday or fun day cancellation, at its discretion.",
     ],
     salaryPolicy: [
@@ -133,12 +133,14 @@ export function createDefaultOfferLetterData(): OfferLetterData {
       "Travel, rent, and food expenses covered for out-of-city site assignments",
       "Bonus on one-year completion, including salary-based bonus and performance bonus",
     ],
-    insuranceCoverage: "Rs. 10,000/year",
-    insuranceMinTenure: "6 months",
+    insuranceCoverage:
+      "The Company will provide insurance coverage to the employee up to Rs. 10,000 per year, either as per the employee's choice or as per Company policy.",
+    insuranceMinTenure:
+      "If the employee leaves the Company before completing six (6) months of employment, the insurance premium amount must be reimbursed to the Company by the employee.",
     terms: [
       createTerm(
         "Probation",
-        "You will be on probation for an initial period of 2 months from your date of joining.\n\n- The probation period may be extended at the sole discretion of the Company based on performance, attendance, conduct, or business requirements.\n- Your employment will be confirmed only upon written communication from the Company.\n- During probation, your performance and suitability for the role will be reviewed on an ongoing basis.",
+        "You will be on probation for an initial period of 2 months from your date of joining.\n\n- The probation period may be extended at the sole discretion of the Company based on performance, attendance, conduct, or business requirements.\n- Your employment will be confirmed only upon written communication from the Company.\n- During probation, your performance and suitability for the role will be reviewed on an ongoing basis.\n- Upon successful completion of the probation period, your salary may be revised and increased based on your performance during the probation phase.",
       ),
       createTerm(
         "Notice Period",
