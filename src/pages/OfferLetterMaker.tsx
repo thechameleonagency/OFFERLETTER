@@ -1,11 +1,11 @@
-import { ArrowLeft, Eye, FileDown, PencilLine, Save } from "lucide-react";
+import { ArrowLeft, Columns2, Eye, FileDown, Maximize2, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBeforeUnload, useNavigate, useParams } from "react-router-dom";
 import { OfferLetterEditor } from "../components/offer-letter/OfferLetterEditor";
 import { OfferLetterPreview } from "../components/offer-letter/OfferLetterPreview";
 import { SaveOfferLetterDialog } from "../components/offer-letter/SaveOfferLetterDialog";
 import { buildLegacyResponsibilities, createDefaultOfferLetterData, normalizeOfferLetterData } from "../lib/offer-letter-defaults";
-import { exportOfferLetterPdf } from "../lib/export-offer-letter-pdf";
+import { exportOfferLetterPdf, exportOfferLetterTextPdf } from "../lib/export-offer-letter-pdf";
 import { clearDraft, getDraft, getOfferLetter, saveDraft, saveOfferLetterRecord } from "../lib/offer-letter-storage";
 import type { OfferLetterData } from "../types/offer-letter";
 
@@ -28,7 +28,8 @@ export function OfferLetterMaker() {
   }, [record]);
 
   const [data, setData] = useState<OfferLetterData>(initialData);
-  const [showPreview, setShowPreview] = useState(false);
+  const [viewMode, setViewMode] = useState<"split" | "editor" | "preview">("split");
+  const [exportMode, setExportMode] = useState<"dom" | "text">("dom");
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState(JSON.stringify(initialData));
@@ -60,7 +61,7 @@ export function OfferLetterMaker() {
   );
 
   async function handleExport() {
-    setShowPreview(true);
+    setViewMode("preview");
     setIsExporting(true);
     await new Promise((resolve) => window.setTimeout(resolve, 500));
 
@@ -71,7 +72,11 @@ export function OfferLetterMaker() {
     }
 
     try {
-      await exportOfferLetterPdf(previewNode, data.employeeName || "offer-letter", data.showPageNumbers);
+      if (exportMode === "text") {
+        await exportOfferLetterTextPdf(previewNode, data.employeeName || "offer-letter", data.showPageNumbers);
+      } else {
+        await exportOfferLetterPdf(previewNode, data.employeeName || "offer-letter", data.showPageNumbers);
+      }
     } finally {
       setIsExporting(false);
     }
@@ -104,24 +109,33 @@ export function OfferLetterMaker() {
   return (
     <div className="page-shell">
       <div className="sticky-topbar">
-        <div>
-          <button className="ghost-button" type="button" onClick={handleBack} style={{ marginBottom: 12 }}>
-            <ArrowLeft size={16} />
-            Back
-          </button>
-          <div className="maker-heading">
-            <h1>Offer Letter</h1>
-            <div className={`status-pill ${isDirty ? "dirty" : ""}`}>{isDirty ? "Unsaved changes" : "All changes saved"}</div>
-          </div>
-        </div>
+        <button className="ghost-button" type="button" onClick={handleBack}>
+          <ArrowLeft size={16} />
+          Back
+        </button>
         <div className="topbar-actions">
-          <button className="ghost-button" type="button" onClick={() => setShowPreview((value) => !value)}>
-            {showPreview ? <PencilLine size={16} /> : <Eye size={16} />}
-            {showPreview ? "Editor" : "Preview"}
-          </button>
+          <div className={`status-pill ${isDirty ? "dirty" : ""}`}>{isDirty ? "Unsaved changes" : "All changes saved"}</div>
+          <div className="segmented-control">
+            <button className={`segment-button ${viewMode === "split" ? "active" : ""}`} type="button" onClick={() => setViewMode("split")}>
+              <Columns2 size={16} />
+              Split
+            </button>
+            <button className={`segment-button ${viewMode === "editor" ? "active" : ""}`} type="button" onClick={() => setViewMode("editor")}>
+              <Maximize2 size={16} />
+              Editor
+            </button>
+            <button className={`segment-button ${viewMode === "preview" ? "active" : ""}`} type="button" onClick={() => setViewMode("preview")}>
+              <Eye size={16} />
+              Preview
+            </button>
+          </div>
+          <select className="export-select" value={exportMode} onChange={(event) => setExportMode(event.target.value as "dom" | "text")}>
+            <option value="dom">DOM Export</option>
+            <option value="text">Text-based PDF</option>
+          </select>
           <button className="ghost-button" type="button" onClick={handleExport} disabled={isExporting}>
             <FileDown size={16} />
-            {isExporting ? "Exporting..." : "Export PDF"}
+            {isExporting ? "Exporting..." : exportMode === "text" ? "Export Text PDF" : "Export PDF"}
           </button>
           <button className="primary-button" type="button" onClick={() => setSaveDialogOpen(true)}>
             <Save size={16} />
@@ -130,8 +144,8 @@ export function OfferLetterMaker() {
         </div>
       </div>
 
-      <div className="layout-grid">
-        {!showPreview ? (
+      <div className={`layout-grid ${viewMode === "editor" ? "editor-only-grid" : viewMode === "preview" ? "preview-only-grid" : ""}`}>
+        {viewMode !== "preview" ? (
           <section className="content-card editor-shell">
             <div className="panel-header">
               <div>
@@ -140,13 +154,12 @@ export function OfferLetterMaker() {
               </div>
               <p className="muted-text">Fill each section in order and the document updates automatically.</p>
             </div>
-            <div className="scroll-area">
-              <OfferLetterEditor data={data} onChange={setData} />
-            </div>
+            <OfferLetterEditor data={data} onChange={setData} />
           </section>
         ) : null}
 
-        <section className="content-card preview-shell" ref={previewRef} style={{ gridColumn: showPreview ? "1 / -1" : undefined }}>
+        {viewMode !== "editor" ? (
+          <section className="content-card preview-shell" ref={previewRef}>
           <div className="panel-header">
             <div>
               <p className="eyebrow">Preview</p>
@@ -157,10 +170,11 @@ export function OfferLetterMaker() {
           <div className="preview-scale-note">
             A4-based pages are rendered here exactly as export pages, so review layout and page breaks before downloading.
           </div>
-          <div className="scroll-area" style={{ width: "100%", display: "grid", justifyItems: "center" }}>
+          <div style={{ width: "100%", display: "grid", justifyItems: "center" }}>
             <OfferLetterPreview data={data} />
           </div>
         </section>
+        ) : null}
       </div>
 
       <SaveOfferLetterDialog

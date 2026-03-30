@@ -105,3 +105,52 @@ export async function exportOfferLetterPdf(element: HTMLElement, fileName: strin
     pdf.save(`${fileName || "offer-letter"}.pdf`);
   });
 }
+
+export async function exportOfferLetterTextPdf(element: HTMLElement, fileName: string, showPageNumbers: boolean) {
+  await document.fonts.ready;
+
+  await withEmbeddedImages(element, async () => {
+    const pages = Array.from(element.querySelectorAll<HTMLElement>("[data-export-page='true']"));
+    if (pages.length === 0) {
+      return;
+    }
+
+    let pdf: jsPDF | null = null;
+
+    for (const [index, page] of pages.entries()) {
+      const pageRect = page.getBoundingClientRect();
+      const pageHeightMm = (pageRect.height / pageRect.width) * 210;
+
+      if (!pdf) {
+        pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [210, pageHeightMm] });
+      } else {
+        pdf.addPage([210, pageHeightMm], "portrait");
+      }
+
+      await pdf.html(page, {
+        x: 0,
+        y: 0,
+        width: 210,
+        windowWidth: Math.ceil(pageRect.width),
+        autoPaging: "text",
+        html2canvas: {
+          scale: 1,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          width: Math.ceil(pageRect.width),
+          height: Math.ceil(pageRect.height),
+        },
+      });
+
+      if (showPageNumbers) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(120, 128, 140);
+        pdf.text(`Page ${index + 1} of ${pages.length}`, 200, pageHeightMm - 6, {
+          align: "right",
+        });
+      }
+    }
+
+    pdf?.save(`${fileName || "offer-letter"}.pdf`);
+  });
+}

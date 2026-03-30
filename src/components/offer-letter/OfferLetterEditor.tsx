@@ -57,7 +57,7 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
 
   return (
     <div className="stack">
-      <AccordionSection title="Letterhead / Header" helper="These details appear in the header on every page.">
+      <AccordionSection title="Letterhead / Header" helper="This appears on page 1.">
         <ImageUploader label="Company Logo" value={data.company.logoUrl} onChange={(value) => updateCompany("logoUrl", value)} />
         <div className="field-grid">
           <div className="field">

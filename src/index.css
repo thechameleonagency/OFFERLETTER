@@ -79,7 +79,7 @@ a {
 .page-shell {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 32px 20px 120px;
+  padding: 24px 20px 120px;
 }
 
 .hero-card,
@@ -189,6 +189,11 @@ a {
   align-items: start;
 }
 
+.editor-only-grid,
+.preview-only-grid {
+  grid-template-columns: 1fr;
+}
+
 .stack {
   display: grid;
   gap: 16px;
@@ -216,6 +221,7 @@ a {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .status-pill {
@@ -262,9 +268,46 @@ a {
 }
 
 .scroll-area {
-  max-height: calc(100vh - 205px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 4px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid #e2e8f0;
+}
+
+.segment-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: #52607a;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.segment-button.active {
+  background: #ffffff;
+  color: #152036;
+  box-shadow: 0 8px 20px rgba(21, 32, 54, 0.08);
+}
+
+.export-select {
+  border-radius: 999px;
+  border: 1px solid #dce3ef;
+  background: #ffffff;
+  color: #152036;
+  padding: 11px 16px;
+  outline: none;
 }
 
 .editor-section {
@@ -508,10 +551,6 @@ a {
 @media (max-width: 1120px) {
   .layout-grid {
     grid-template-columns: 1fr;
-  }
-
-  .scroll-area {
-    max-height: none;
   }
 }
 
