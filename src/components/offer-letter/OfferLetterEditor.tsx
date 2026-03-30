@@ -191,8 +191,6 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
         <div className="toggle-grid">
           {[
             ["Show Acceptance Section", "showAcceptance"],
-            ["Show Seal", "showSeal"],
-            ["Show Signature", "showSignature"],
             ["Show Page Numbers", "showPageNumbers"],
           ].map(([label, key]) => {
             const typedKey = key as keyof OfferLetterData;
@@ -208,9 +206,6 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
             );
           })}
         </div>
-        <div style={{ height: 16 }} />
-        <ImageUploader label="Seal Image" value={data.sealUrl} onChange={(value) => update("sealUrl", value)} />
-        <ImageUploader label="Signature Image" value={data.signatureUrl} onChange={(value) => update("signatureUrl", value)} />
         <div className="field">
           <label>Signatory Name</label>
           <input value={data.signatoryName} onChange={(event) => update("signatoryName", event.target.value)} />
