@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { formatRecordDate } from "../lib/offer-letter-formatters";
 import { deleteOfferLetterRecord, listOfferLetters } from "../lib/offer-letter-storage";
 
 export function AllOfferLetters() {
-  const navigate = useNavigate();
   const [refreshToken, setRefreshToken] = useState(0);
   const records = useMemo(() => listOfferLetters(), [refreshToken]);
 
@@ -26,10 +25,6 @@ export function AllOfferLetters() {
           <h1>Offer Letters</h1>
           <p>Open any saved letter, continue editing it, or delete old drafts you no longer need.</p>
         </div>
-        <button className="primary-button" type="button" onClick={() => navigate("/offer-letter")}>
-          <Plus size={16} />
-          New Offer Letter
-        </button>
       </div>
 
       {records.length === 0 ? (
@@ -37,12 +32,8 @@ export function AllOfferLetters() {
           <p className="eyebrow">Nothing Saved Yet</p>
           <h2 style={{ marginTop: 0 }}>Create your first offer letter</h2>
           <p className="muted-text">
-            Saved offer letters will appear here with their latest update time so you can reopen them quickly.
+            Use the single Create Offer Letter button at the top to start a new document. Saved letters will appear here.
           </p>
-          <Link className="primary-button" to="/offer-letter">
-            <FileText size={16} />
-            Start Creating
-          </Link>
         </div>
       ) : (
         <div className="saved-grid">

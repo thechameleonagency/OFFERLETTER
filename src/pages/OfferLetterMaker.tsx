@@ -1,6 +1,6 @@
 import { ArrowLeft, Eye, FileDown, PencilLine, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useBeforeUnload, useBlocker, useNavigate, useParams } from "react-router-dom";
+import { useBeforeUnload, useNavigate, useParams } from "react-router-dom";
 import { OfferLetterEditor } from "../components/offer-letter/OfferLetterEditor";
 import { OfferLetterPreview } from "../components/offer-letter/OfferLetterPreview";
 import { SaveOfferLetterDialog } from "../components/offer-letter/SaveOfferLetterDialog";
@@ -28,7 +28,7 @@ export function OfferLetterMaker() {
   }, [record]);
 
   const [data, setData] = useState<OfferLetterData>(initialData);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState(JSON.stringify(initialData));
@@ -53,21 +53,11 @@ export function OfferLetterMaker() {
     (event) => {
       if (isDirty) {
         event.preventDefault();
+        event.returnValue = "";
       }
     },
     { capture: true },
   );
-
-  const blocker = useBlocker(isDirty);
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      if (window.confirm("You have unsaved changes. Leave this page?")) {
-        blocker.proceed();
-      } else {
-        blocker.reset();
-      }
-    }
-  }, [blocker]);
 
   async function handleExport() {
     setShowPreview(true);
@@ -104,11 +94,11 @@ export function OfferLetterMaker() {
   }
 
   function handleBack() {
-    if (isDirty && !window.confirm("You have unsaved changes. Go back to home anyway?")) {
+    if (isDirty && !window.confirm("You have unsaved changes. Go back to all letters anyway?")) {
       return;
     }
 
-    navigate("/");
+    navigate("/offer-letters");
   }
 
   return (
