@@ -10,8 +10,8 @@ interface OfferLetterPreviewProps {
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
 const HEADER_HEIGHT = 150;
-const BODY_MIN_HEIGHT = PAGE_HEIGHT - HEADER_HEIGHT;
-const FOLLOW_UP_PAGE_BODY_CAPACITY = 860;
+const PAGE_HORIZONTAL_PADDING = 112;
+const BASE_BODY_CAPACITY = PAGE_HEIGHT - HEADER_HEIGHT - 64;
 
 const bodyStyle: CSSProperties = {
   padding: "24px 56px",
@@ -66,6 +66,17 @@ function estimateTermHeight(term: OfferLetterTerm) {
 
 function estimateAcceptanceHeight(data: OfferLetterData) {
   return 170 + estimateTextLines(`${data.employeeName} ${data.role}`, 56) * 18;
+}
+
+function estimateFirstPageHeight(data: OfferLetterData) {
+  return (
+    PAGE_HEIGHT +
+    estimateTextLines(data.employeeName, 36) * 10 +
+    estimateTextLines(data.employeeAddress, 62) * 14 +
+    estimateTextLines(data.role, 40) * 12 +
+    estimateRichTextHeight(data.responsibilities) +
+    estimateTextLines(data.reportingTo, 30) * 10
+  );
 }
 
 function chunkTermsByPage(terms: OfferLetterTerm[], firstPageCapacity: number, nextPageCapacity: number) {
@@ -143,17 +154,22 @@ function Page({
   children,
   data,
   pageIndex,
+  showHeader = true,
+  pageHeight,
 }: {
   children: ReactNode;
   data: OfferLetterData;
   pageIndex: number;
+  showHeader?: boolean;
+  pageHeight: number;
 }) {
   return (
     <div
+      data-export-page="true"
       data-page-break={pageIndex > 0 ? "true" : undefined}
       style={{
         width: PAGE_WIDTH,
-        minHeight: PAGE_HEIGHT,
+        minHeight: pageHeight,
         background: "#ffffff",
         color: "#111827",
         fontFamily: "Lexend, sans-serif",
@@ -161,14 +177,24 @@ function Page({
         overflow: "hidden",
       }}
     >
-      <Header data={data} />
-      <div style={{ ...bodyStyle, minHeight: BODY_MIN_HEIGHT }}>{children}</div>
+      {showHeader ? <Header data={data} /> : null}
+      <div
+        style={{
+          ...bodyStyle,
+          minHeight: showHeader ? pageHeight - HEADER_HEIGHT : pageHeight - 48,
+          paddingTop: showHeader ? bodyStyle.paddingTop : 40,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
 export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
   const signatory = filledValue(data.signatoryName || data.company.founderName);
+  const sharedPageHeight = Math.max(PAGE_HEIGHT, estimateFirstPageHeight(data));
+  const followUpBodyCapacity = Math.max(BASE_BODY_CAPACITY, sharedPageHeight - PAGE_HORIZONTAL_PADDING - 48);
   const policiesIntroHeight =
     48 +
     estimatePolicySectionHeight("Leave Policy", data.leavePolicy) +
@@ -176,11 +202,11 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
     estimatePolicySectionHeight("Other Benefits", data.otherBenefits) +
     88;
   const termsHeadingHeight = 52;
-  const firstTermsCapacity = Math.max(220, FOLLOW_UP_PAGE_BODY_CAPACITY - policiesIntroHeight - termsHeadingHeight);
-  const termPages = chunkTermsByPage(data.terms, firstTermsCapacity, FOLLOW_UP_PAGE_BODY_CAPACITY - 52);
+  const firstTermsCapacity = Math.max(220, followUpBodyCapacity - policiesIntroHeight - termsHeadingHeight);
+  const laterTermsCapacity = Math.max(320, followUpBodyCapacity - 52);
+  const termPages = chunkTermsByPage(data.terms, firstTermsCapacity, laterTermsCapacity);
   const lastPageTermHeight = termPages[termPages.length - 1].reduce((sum, term) => sum + estimateTermHeight(term), 0);
-  const needsAcceptancePage =
-    data.showAcceptance && lastPageTermHeight + estimateAcceptanceHeight(data) > FOLLOW_UP_PAGE_BODY_CAPACITY - 52;
+  const needsAcceptancePage = data.showAcceptance && lastPageTermHeight + estimateAcceptanceHeight(data) > laterTermsCapacity;
 
   return (
     <div
@@ -192,7 +218,7 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
         overflow: "visible",
       }}
     >
-      <Page data={data} pageIndex={0}>
+      <Page data={data} pageIndex={0} pageHeight={sharedPageHeight}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 3 }}>OFFER LETTER</div>
         </div>
@@ -259,7 +285,7 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
         </div>
       </Page>
 
-      <Page data={data} pageIndex={1}>
+      <Page data={data} pageIndex={1} showHeader={false} pageHeight={sharedPageHeight}>
         <h2 style={headingStyle}>COMPANY POLICIES & BENEFITS</h2>
         {[
           { title: "Leave Policy", items: data.leavePolicy },
@@ -304,7 +330,13 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
         const isLastTermsPage = pageOffset === termPages.length - 2;
 
         return (
-          <Page data={data} key={`terms-page-${pageOffset + 2}`} pageIndex={pageOffset + 2}>
+          <Page
+            data={data}
+            key={`terms-page-${pageOffset + 2}`}
+            pageIndex={pageOffset + 2}
+            showHeader={false}
+            pageHeight={sharedPageHeight}
+          >
             <h2 style={headingStyle}>TERMS AND CONDITIONS</h2>
             <div>
               {pageTerms.map((term, index) => (
@@ -342,7 +374,7 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
       })}
 
       {data.showAcceptance && (needsAcceptancePage || termPages.length === 1) ? (
-        <Page data={data} pageIndex={termPages.length + 1}>
+        <Page data={data} pageIndex={termPages.length + 1} showHeader={false} pageHeight={sharedPageHeight}>
           <h2 style={headingStyle}>ACCEPTANCE</h2>
           <p style={{ margin: "0 0 22px", lineHeight: 1.8 }}>
             I, <strong>{filledValue(data.employeeName)}</strong>, accept the offer made to me for the role of{" "}
