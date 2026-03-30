@@ -196,11 +196,11 @@ export function OfferLetterEditor({ data, onChange }: OfferLetterEditorProps) {
         <BulletListEditor label="Salary Policy" items={data.salaryPolicy} onChange={(next) => update("salaryPolicy", next)} />
         <BulletListEditor label="Other Benefits" items={data.otherBenefits} onChange={(next) => update("otherBenefits", next)} />
         <div className="field-grid">
-          <div className="field">
+          <div className="field full-span">
             <label>Insurance Policy</label>
             <textarea rows={4} value={data.insuranceCoverage} onChange={(event) => update("insuranceCoverage", event.target.value)} />
           </div>
-          <div className="field">
+          <div className="field full-span">
             <label>Insurance Reimbursement Condition</label>
             <textarea rows={4} value={data.insuranceMinTenure} onChange={(event) => update("insuranceMinTenure", event.target.value)} />
           </div>

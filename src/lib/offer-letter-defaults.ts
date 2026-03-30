@@ -56,6 +56,13 @@ export function buildLegacyResponsibilities(data: Pick<
 export function normalizeOfferLetterData(input?: Partial<OfferLetterData> | null): OfferLetterData {
   const defaults = createDefaultOfferLetterData();
   const legacy = parseLegacyResponsibilities(input?.responsibilities);
+  const legacyInsuranceCoverageValues = new Set([
+    "",
+    " insurnace upto Rs. 10,000/year",
+    "insurance upto Rs. 10,000/year",
+    "Insurance upto Rs. 10,000/year",
+  ]);
+  const legacyInsuranceMinTenureValues = new Set(["", "6 months"]);
 
   const normalized: OfferLetterData = {
     ...defaults,
@@ -72,6 +79,36 @@ export function normalizeOfferLetterData(input?: Partial<OfferLetterData> | null
       input?.responsibilitiesClosing ?? legacy?.responsibilitiesClosing ?? defaults.responsibilitiesClosing,
     reportingClosing: input?.reportingClosing ?? legacy?.reportingClosing ?? defaults.reportingClosing,
   };
+
+  if (legacyInsuranceCoverageValues.has((input?.insuranceCoverage ?? "").trim())) {
+    normalized.insuranceCoverage = defaults.insuranceCoverage;
+  }
+
+  if (legacyInsuranceMinTenureValues.has((input?.insuranceMinTenure ?? "").trim())) {
+    normalized.insuranceMinTenure = defaults.insuranceMinTenure;
+  }
+
+  normalized.terms = normalized.terms.map((term) => {
+    if (
+      term.title === "Probation" &&
+      !term.content.includes("salary may be revised and increased based on your performance during the probation phase")
+    ) {
+      return {
+        ...term,
+        content: `${term.content}\n- Upon successful completion of the probation period, your salary may be revised and increased based on your performance during the probation phase.`,
+      };
+    }
+
+    if (term.title === "Employee Insurance Policy") {
+      return {
+        ...term,
+        content:
+          "The Company will provide insurance coverage to the employee up to Rs. 10,000 per year.\n\n- The insurance may be provided either as per the employee's choice or as per Company policy.\n- If the employee leaves the Company before completing six (6) months of employment, the insurance premium amount must be reimbursed to the Company by the employee.",
+      };
+    }
+
+    return term;
+  });
 
   normalized.responsibilities = buildLegacyResponsibilities(normalized);
   return normalized;
@@ -102,15 +139,12 @@ export function createDefaultOfferLetterData(): OfferLetterData {
     roleOverview: "In this role, you will be responsible for:",
     responsibilityPoints: [
       "File login, file preparation, and submission to banks",
-      "Document handling and loan management",
+    
     ],
     adminIntro: "Administrative operations including:",
     adminPoints: [
       "Expense tracking",
       "Site coordination",
-      "Data management",
-      "Attendance records",
-      "Inventory handling",
       "Preparation of quotations",
     ],
     responsibilitiesClosing:
