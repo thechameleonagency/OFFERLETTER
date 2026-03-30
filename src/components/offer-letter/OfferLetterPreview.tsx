@@ -1,20 +1,30 @@
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { filledValue, formatCurrency, formatDate } from "../../lib/offer-letter-formatters";
 import { renderRichText } from "../../lib/offer-letter-parser";
-import type { OfferLetterData, OfferLetterTerm } from "../../types/offer-letter";
+import type { OfferLetterData } from "../../types/offer-letter";
 
 interface OfferLetterPreviewProps {
   data: OfferLetterData;
 }
 
+interface PreviewBlock {
+  key: string;
+  estimate: number;
+  forceNewPageBefore?: boolean;
+  node: ReactNode;
+}
+
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
 const HEADER_HEIGHT = 150;
-const PAGE_HORIZONTAL_PADDING = 112;
-const BASE_BODY_CAPACITY = PAGE_HEIGHT - HEADER_HEIGHT - 64;
+const PAGE_TOP_BOTTOM_PADDING = 40;
+const PAGE_SIDE_PADDING = 56;
+const FIRST_PAGE_CAPACITY = PAGE_HEIGHT - HEADER_HEIGHT - PAGE_TOP_BOTTOM_PADDING * 2;
+const FOLLOWING_PAGE_CAPACITY = PAGE_HEIGHT - PAGE_TOP_BOTTOM_PADDING * 2;
 
-const bodyStyle: CSSProperties = {
-  padding: "24px 56px",
+const pageBodyStyle: CSSProperties = {
+  padding: `${PAGE_TOP_BOTTOM_PADDING}px ${PAGE_SIDE_PADDING}px`,
 };
 
 const headingStyle: CSSProperties = {
@@ -25,14 +35,14 @@ const headingStyle: CSSProperties = {
   color: "#152036",
 };
 
-const separator: CSSProperties = {
+const separatorStyle: CSSProperties = {
   border: "none",
   borderTop: "1px solid #e5e7eb",
   margin: "18px 0",
 };
 
 function estimateTextLines(text: string, charsPerLine: number) {
-  return Math.max(1, Math.ceil(text.trim().length / charsPerLine));
+  return Math.max(1, Math.ceil((text || "").trim().length / charsPerLine));
 }
 
 function estimateRichTextHeight(text: string) {
@@ -49,66 +59,6 @@ function estimateRichTextHeight(text: string) {
 
     return total + estimateTextLines(line, 72) * 22;
   }, 0);
-}
-
-function estimatePolicySectionHeight(title: string, items: string[]) {
-  return (
-    34 +
-    estimateTextLines(title, 36) * 22 +
-    items.reduce((total, item) => total + estimateTextLines(item, 64) * 22, 0) +
-    18
-  );
-}
-
-function estimateTermHeight(term: OfferLetterTerm) {
-  return 30 + estimateRichTextHeight(term.content) + 26;
-}
-
-function estimateAcceptanceHeight(data: OfferLetterData) {
-  return 170 + estimateTextLines(`${data.employeeName} ${data.role}`, 56) * 18;
-}
-
-function estimateFirstPageHeight(data: OfferLetterData) {
-  return (
-    PAGE_HEIGHT +
-    estimateTextLines(data.employeeName, 36) * 10 +
-    estimateTextLines(data.employeeAddress, 62) * 14 +
-    estimateTextLines(data.role, 40) * 12 +
-    estimateRichTextHeight(data.responsibilities) +
-    estimateTextLines(data.reportingTo, 30) * 10
-  );
-}
-
-function chunkTermsByPage(terms: OfferLetterTerm[], firstPageCapacity: number, nextPageCapacity: number) {
-  const pages: OfferLetterTerm[][] = [];
-  let currentPage: OfferLetterTerm[] = [];
-  let remaining = firstPageCapacity;
-
-  for (const term of terms) {
-    const termHeight = estimateTermHeight(term);
-
-    if (currentPage.length > 0 && termHeight > remaining) {
-      pages.push(currentPage);
-      currentPage = [term];
-      remaining = nextPageCapacity - termHeight;
-      continue;
-    }
-
-    currentPage.push(term);
-    remaining -= termHeight;
-
-    if (remaining < 120) {
-      pages.push(currentPage);
-      currentPage = [];
-      remaining = nextPageCapacity;
-    }
-  }
-
-  if (currentPage.length > 0) {
-    pages.push(currentPage);
-  }
-
-  return pages.length > 0 ? pages : [[]];
 }
 
 function Header({ data }: { data: OfferLetterData }) {
@@ -154,22 +104,19 @@ function Page({
   children,
   data,
   pageIndex,
-  showHeader = true,
-  pageHeight,
 }: {
   children: ReactNode;
   data: OfferLetterData;
   pageIndex: number;
-  showHeader?: boolean;
-  pageHeight: number;
 }) {
+  const showHeader = pageIndex === 0;
+
   return (
     <div
       data-export-page="true"
-      data-page-break={pageIndex > 0 ? "true" : undefined}
       style={{
         width: PAGE_WIDTH,
-        minHeight: pageHeight,
+        minHeight: PAGE_HEIGHT,
         background: "#ffffff",
         color: "#111827",
         fontFamily: "Lexend, sans-serif",
@@ -180,9 +127,8 @@ function Page({
       {showHeader ? <Header data={data} /> : null}
       <div
         style={{
-          ...bodyStyle,
-          minHeight: showHeader ? pageHeight - HEADER_HEIGHT : pageHeight - 48,
-          paddingTop: showHeader ? bodyStyle.paddingTop : 40,
+          ...pageBodyStyle,
+          minHeight: showHeader ? FIRST_PAGE_CAPACITY : FOLLOWING_PAGE_CAPACITY,
         }}
       >
         {children}
@@ -191,55 +137,60 @@ function Page({
   );
 }
 
-export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
-  const signatory = filledValue(data.signatoryName || data.company.founderName);
-  const sharedPageHeight = Math.max(PAGE_HEIGHT, estimateFirstPageHeight(data));
-  const followUpBodyCapacity = Math.max(BASE_BODY_CAPACITY, sharedPageHeight - PAGE_HORIZONTAL_PADDING - 48);
-  const policiesIntroHeight =
-    48 +
-    estimatePolicySectionHeight("Leave Policy", data.leavePolicy) +
-    estimatePolicySectionHeight("Salary Policy", data.salaryPolicy) +
-    estimatePolicySectionHeight("Other Benefits", data.otherBenefits) +
-    88;
-  const termsHeadingHeight = 52;
-  const firstTermsCapacity = Math.max(220, followUpBodyCapacity - policiesIntroHeight - termsHeadingHeight);
-  const laterTermsCapacity = Math.max(320, followUpBodyCapacity - 52);
-  const termPages = chunkTermsByPage(data.terms, firstTermsCapacity, laterTermsCapacity);
-  const lastPageTermHeight = termPages[termPages.length - 1].reduce((sum, term) => sum + estimateTermHeight(term), 0);
-  const needsAcceptancePage = data.showAcceptance && lastPageTermHeight + estimateAcceptanceHeight(data) > laterTermsCapacity;
-
-  return (
-    <div
-      id="offer-letter-preview"
-      style={{
-        width: PAGE_WIDTH,
-        display: "grid",
-        gap: 28,
-        overflow: "visible",
-      }}
-    >
-      <Page data={data} pageIndex={0} pageHeight={sharedPageHeight}>
+function createPreviewBlocks(data: OfferLetterData, signatory: string): PreviewBlock[] {
+  const blocks: PreviewBlock[] = [
+    {
+      key: "title",
+      estimate: 60,
+      node: (
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 3 }}>OFFER LETTER</div>
         </div>
-
+      ),
+    },
+    {
+      key: "to-block",
+      estimate: 90 + estimateTextLines(data.employeeAddress, 62) * 18,
+      node: (
         <div style={{ marginBottom: 16, lineHeight: 1.7 }}>
           <p style={{ margin: "0 0 4px" }}>To,</p>
           <p style={{ margin: "0 0 4px", fontWeight: 700 }}>{filledValue(data.employeeName)}</p>
           <p style={{ margin: 0, whiteSpace: "pre-line" }}>{filledValue(data.employeeAddress)}</p>
         </div>
-
+      ),
+    },
+    {
+      key: "subject",
+      estimate: 42,
+      node: (
         <p style={{ margin: "0 0 14px", lineHeight: 1.7 }}>
           <strong>Subject:</strong> Offer for the role of <strong>{filledValue(data.role)}</strong>
         </p>
+      ),
+    },
+    {
+      key: "dear",
+      estimate: 40,
+      node: (
         <p style={{ margin: "0 0 14px", lineHeight: 1.7 }}>
           Dear <strong>{filledValue(data.employeeName)}</strong>,
         </p>
+      ),
+    },
+    {
+      key: "intro",
+      estimate: 50 + estimateTextLines(data.role + data.company.name, 52) * 10,
+      node: (
         <p style={{ margin: "0 0 14px", lineHeight: 1.8 }}>
           {filledValue(data.company.name)} is pleased to offer you the position of <strong>{filledValue(data.role)}</strong>{" "}
           with our organization.
         </p>
-
+      ),
+    },
+    {
+      key: "details",
+      estimate: 88,
+      node: (
         <div style={{ marginBottom: 14, lineHeight: 1.8 }}>
           <p style={{ margin: "0 0 4px" }}>
             <strong>Date of Joining:</strong> {formatDate(data.dateOfJoining)}
@@ -253,27 +204,56 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
             <strong>Monthly Salary:</strong> {formatCurrency(data.monthlySalary)}
           </p>
         </div>
-
+      ),
+    },
+    {
+      key: "validity",
+      estimate: 56,
+      node: (
         <p style={{ margin: "0 0 18px", color: "#6b7280", fontStyle: "italic", lineHeight: 1.7 }}>
           This offer is valid for <strong>{data.offerValidityDays || 15} days</strong> from the date of issuance. Kindly
           confirm your acceptance within this period.
         </p>
-
-        <hr style={separator} />
-
-        <div>
-          <h2 style={headingStyle}>ROLE, RESPONSIBILITIES & REPORTING</h2>
-          {renderRichText(data.responsibilities, "responsibilities")}
-        </div>
-
+      ),
+    },
+    {
+      key: "pre-separator",
+      estimate: 20,
+      node: <hr style={separatorStyle} />,
+    },
+    {
+      key: "role-heading",
+      estimate: 34,
+      node: <h2 style={headingStyle}>ROLE, RESPONSIBILITIES & REPORTING</h2>,
+    },
+    {
+      key: "responsibilities",
+      estimate: estimateRichTextHeight(data.responsibilities) + 30,
+      node: <div>{renderRichText(data.responsibilities, "responsibilities")}</div>,
+    },
+    {
+      key: "reporting",
+      estimate: 60,
+      node: (
         <p style={{ margin: "18px 0 10px", lineHeight: 1.8 }}>
           You will report directly to <strong>{filledValue(data.reportingTo)}</strong> and are expected to support the
           company with dedication, accuracy, and professionalism.
         </p>
+      ),
+    },
+    {
+      key: "closing",
+      estimate: 58,
+      node: (
         <p style={{ margin: "0 0 26px", lineHeight: 1.8 }}>
           We look forward to having you as part of the team and hope for a successful and mutually rewarding association.
         </p>
-
+      ),
+    },
+    {
+      key: "signature-block",
+      estimate: 150,
+      node: (
         <div style={{ position: "relative", minHeight: 130, marginTop: 18 }}>
           <p style={{ margin: "0 0 18px", lineHeight: 1.7 }}>Warm regards,</p>
           <div style={{ position: "absolute", bottom: 0, left: 0 }}>
@@ -283,98 +263,88 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
             <p style={{ margin: 0 }}>{filledValue(data.company.phone)}</p>
           </div>
         </div>
-      </Page>
+      ),
+    },
+    {
+      key: "policies-heading",
+      estimate: 34,
+      forceNewPageBefore: true,
+      node: <h2 style={headingStyle}>COMPANY POLICIES & BENEFITS</h2>,
+    },
+  ];
 
-      <Page data={data} pageIndex={1} showHeader={false} pageHeight={sharedPageHeight}>
-        <h2 style={headingStyle}>COMPANY POLICIES & BENEFITS</h2>
-        {[
-          { title: "Leave Policy", items: data.leavePolicy },
-          { title: "Salary Policy", items: data.salaryPolicy },
-          { title: "Other Benefits", items: data.otherBenefits },
-        ].map((section, index) => (
-          <div key={section.title}>
-            <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>{section.title}</h3>
-            <ul style={{ margin: "0 0 14px", paddingLeft: 20, lineHeight: 1.8 }}>
-              {section.items.map((item, itemIndex) => (
-                <li key={`${section.title}-${itemIndex}`}>{filledValue(item)}</li>
-              ))}
-            </ul>
-            {index < 2 ? <hr style={separator} /> : null}
-          </div>
-        ))}
-
-        <p style={{ margin: "14px 0 4px", lineHeight: 1.8 }}>
-          <strong>Insurance Coverage:</strong> {filledValue(data.insuranceCoverage)}
-        </p>
-        <p style={{ margin: "0 0 18px", lineHeight: 1.8 }}>
-          <strong>Minimum Tenure for Insurance:</strong> {filledValue(data.insuranceMinTenure)}
-        </p>
-
-        <hr style={separator} />
-
-        <h2 style={headingStyle}>TERMS AND CONDITIONS</h2>
+  [
+    { title: "Leave Policy", items: data.leavePolicy },
+    { title: "Salary Policy", items: data.salaryPolicy },
+    { title: "Other Benefits", items: data.otherBenefits },
+  ].forEach((section, index) => {
+    blocks.push({
+      key: `policy-${section.title}`,
+      estimate: 46 + section.items.reduce((sum, item) => sum + estimateTextLines(item, 64) * 22, 0),
+      node: (
         <div>
-          {termPages[0].map((term, index) => (
-            <div key={term.id}>
-              <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>
-                {data.terms.indexOf(term) + 1}. {filledValue(term.title)}
-              </h3>
-              {renderRichText(term.content, term.id)}
-              {index < termPages[0].length - 1 ? <hr style={separator} /> : null}
-            </div>
-          ))}
+          <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>{section.title}</h3>
+          <ul style={{ margin: "0 0 14px", paddingLeft: 20, lineHeight: 1.8 }}>
+            {section.items.map((item, itemIndex) => (
+              <li key={`${section.title}-${itemIndex}`}>{filledValue(item)}</li>
+            ))}
+          </ul>
+          {index < 2 ? <hr style={separatorStyle} /> : null}
         </div>
-      </Page>
+      ),
+    });
+  });
 
-      {termPages.slice(1).map((pageTerms, pageOffset) => {
-        const isLastTermsPage = pageOffset === termPages.length - 2;
+  blocks.push(
+    {
+      key: "insurance",
+      estimate: 70,
+      node: (
+        <div>
+          <p style={{ margin: "14px 0 4px", lineHeight: 1.8 }}>
+            <strong>Insurance Coverage:</strong> {filledValue(data.insuranceCoverage)}
+          </p>
+          <p style={{ margin: "0 0 18px", lineHeight: 1.8 }}>
+            <strong>Minimum Tenure for Insurance:</strong> {filledValue(data.insuranceMinTenure)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "terms-separator",
+      estimate: 20,
+      node: <hr style={separatorStyle} />,
+    },
+    {
+      key: "terms-heading",
+      estimate: 34,
+      node: <h2 style={headingStyle}>TERMS AND CONDITIONS</h2>,
+    },
+  );
 
-        return (
-          <Page
-            data={data}
-            key={`terms-page-${pageOffset + 2}`}
-            pageIndex={pageOffset + 2}
-            showHeader={false}
-            pageHeight={sharedPageHeight}
-          >
-            <h2 style={headingStyle}>TERMS AND CONDITIONS</h2>
-            <div>
-              {pageTerms.map((term, index) => (
-                <div key={term.id}>
-                  <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>
-                    {data.terms.indexOf(term) + 1}. {filledValue(term.title)}
-                  </h3>
-                  {renderRichText(term.content, `${term.id}-page-${pageOffset}`)}
-                  {index < pageTerms.length - 1 ? <hr style={separator} /> : null}
-                </div>
-              ))}
-            </div>
+  data.terms.forEach((term, index) => {
+    blocks.push({
+      key: term.id,
+      estimate: 34 + estimateRichTextHeight(term.content) + 34,
+      node: (
+        <div>
+          <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>
+            {index + 1}. {filledValue(term.title)}
+          </h3>
+          {renderRichText(term.content, term.id)}
+          {index < data.terms.length - 1 ? <hr style={separatorStyle} /> : null}
+        </div>
+      ),
+    });
+  });
 
-            {data.showAcceptance && !needsAcceptancePage && isLastTermsPage ? (
-              <div style={{ marginTop: 24 }}>
-                <hr style={separator} />
-                <h2 style={headingStyle}>ACCEPTANCE</h2>
-                <p style={{ margin: "0 0 22px", lineHeight: 1.8 }}>
-                  I, <strong>{filledValue(data.employeeName)}</strong>, accept the offer made to me for the role of{" "}
-                  <strong>{filledValue(data.role)}</strong> and agree to abide by the terms and conditions mentioned in this
-                  letter.
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, marginTop: 34 }}>
-                  <div>
-                    <div style={{ borderTop: "1px solid #111827", paddingTop: 8 }}>Employee Signature</div>
-                  </div>
-                  <div>
-                    <div style={{ borderTop: "1px solid #111827", paddingTop: 8 }}>Date</div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </Page>
-        );
-      })}
-
-      {data.showAcceptance && (needsAcceptancePage || termPages.length === 1) ? (
-        <Page data={data} pageIndex={termPages.length + 1} showHeader={false} pageHeight={sharedPageHeight}>
+  if (data.showAcceptance) {
+    blocks.push({
+      key: "acceptance",
+      estimate: 220,
+      node: (
+        <div style={{ marginTop: 24 }}>
+          <hr style={separatorStyle} />
           <h2 style={headingStyle}>ACCEPTANCE</h2>
           <p style={{ margin: "0 0 22px", lineHeight: 1.8 }}>
             I, <strong>{filledValue(data.employeeName)}</strong>, accept the offer made to me for the role of{" "}
@@ -389,8 +359,107 @@ export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
               <div style={{ borderTop: "1px solid #111827", paddingTop: 8 }}>Date</div>
             </div>
           </div>
-        </Page>
-      ) : null}
-    </div>
+        </div>
+      ),
+    });
+  }
+
+  return blocks;
+}
+
+function paginateBlocks(blocks: PreviewBlock[], heights: Record<string, number>) {
+  const pages: PreviewBlock[][] = [];
+  let currentPage: PreviewBlock[] = [];
+  let remaining = FIRST_PAGE_CAPACITY;
+
+  for (const block of blocks) {
+    const blockHeight = heights[block.key] ?? block.estimate;
+
+    if (block.forceNewPageBefore && currentPage.length > 0) {
+      pages.push(currentPage);
+      currentPage = [];
+      remaining = FOLLOWING_PAGE_CAPACITY;
+    }
+
+    if (currentPage.length > 0 && blockHeight > remaining) {
+      pages.push(currentPage);
+      currentPage = [];
+      remaining = FOLLOWING_PAGE_CAPACITY;
+    }
+
+    currentPage.push(block);
+    remaining -= blockHeight;
+  }
+
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
+  }
+
+  return pages;
+}
+
+export function OfferLetterPreview({ data }: OfferLetterPreviewProps) {
+  const signatory = filledValue(data.signatoryName || data.company.founderName);
+  const blocks = useMemo(() => createPreviewBlocks(data, signatory), [data, signatory]);
+  const measureRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [blockHeights, setBlockHeights] = useState<Record<string, number>>({});
+
+  useLayoutEffect(() => {
+    const nextHeights = Object.fromEntries(
+      blocks.map((block) => [block.key, Math.ceil(measureRefs.current[block.key]?.offsetHeight ?? block.estimate)]),
+    );
+
+    const changed = blocks.some((block) => nextHeights[block.key] !== blockHeights[block.key]);
+    if (changed) {
+      setBlockHeights(nextHeights);
+    }
+  }, [blocks, blockHeights]);
+
+  const pages = paginateBlocks(blocks, blockHeights);
+
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: -99999,
+          top: 0,
+          width: PAGE_WIDTH - PAGE_SIDE_PADDING * 2,
+          visibility: "hidden",
+          pointerEvents: "none",
+        }}
+      >
+        {blocks.map((block) => (
+          <div
+            key={`measure-${block.key}`}
+            ref={(node) => {
+              measureRefs.current[block.key] = node;
+            }}
+            style={{ width: "100%" }}
+          >
+            {block.node}
+          </div>
+        ))}
+      </div>
+
+      <div
+        id="offer-letter-preview"
+        style={{
+          width: PAGE_WIDTH,
+          display: "grid",
+          gap: 28,
+          overflow: "visible",
+        }}
+      >
+        {pages.map((pageBlocks, pageIndex) => (
+          <Page data={data} key={`page-${pageIndex + 1}`} pageIndex={pageIndex}>
+            {pageBlocks.map((block) => (
+              <div key={block.key}>{block.node}</div>
+            ))}
+          </Page>
+        ))}
+      </div>
+    </>
   );
 }
